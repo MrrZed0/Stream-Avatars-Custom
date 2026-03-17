@@ -86,16 +86,16 @@
       left: 50%;
       bottom: 96px;
       transform: translateX(-50%);
-      max-width: 280px;
-      min-width: 42px;
+      max-width: 420px;
+      min-width: 120px;
       min-height: 34px;
-      padding: 7px 10px;
+      padding: 8px 14px;
       border-radius: 14px;
       background: var(--bubble-bg);
       border: 1px solid var(--bubble-border);
       color: #fff;
-      font-size: 12px;
-      line-height: 1.25;
+      font-size: 13px;
+      line-height: 1.35;
       text-align: center;
       opacity: 0;
       scale: 0.92;
@@ -105,8 +105,10 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      gap: 4px;
+      gap: 6px;
       flex-wrap: wrap;
+      word-break: normal;
+      white-space: normal;
     }
 
     .avatar .bubble.show {
@@ -128,8 +130,8 @@
     }
 
     .bubble .bubble-text {
-      white-space: pre-wrap;
-      word-break: break-word;
+      white-space: normal;
+      word-break: normal;
     }
 
     .bubble .bubble-emote {
@@ -441,6 +443,7 @@
       speedMax: 0.16,
       gravity: 0.55,
       pendingRaidMarkMs: 20000,
+      presentMissThreshold: 3,
       hiddenUsers: ["streamelements", "nightbot", "moobot", "soundalerts", "streamlabs"]
     };
 
@@ -456,8 +459,9 @@
 
     const world = document.getElementById("world");
     const statusEl = document.getElementById("status");
-    const avatars = new Map(); // key = lowercase username
+    const avatars = new Map();
     const avatarUrlCache = new Map();
+    const presentState = new Map();
 
     let ws = null;
     let lastFrame = performance.now();
@@ -729,6 +733,7 @@
       if (poof) createPoof(avatar.x + 44, window.innerHeight - 62 - avatar.y);
       avatar.el.remove();
       avatars.delete(key);
+      presentState.delete(key);
     }
 
     function patrolAvatar(avatar) {
@@ -785,10 +790,13 @@
     }
 
     function applyViewerList(names) {
+      const now = Date.now();
       const nextSet = new Set(names.map(normalizeUser));
 
       for (const name of names) {
         const key = normalizeUser(name);
+        presentState.set(key, { lastSeen: now, misses: 0 });
+
         if (!avatars.has(key)) {
           const isRaider = pendingRaidCount > 0 && Date.now() < pendingRaidUntil;
           createAvatar(name, { spawnFall: true, isRaider, silent: true });
@@ -797,8 +805,15 @@
       }
 
       for (const [key, avatar] of avatars) {
-        if (!nextSet.has(key)) {
+        if (nextSet.has(key)) continue;
+
+        const state = presentState.get(key) || { lastSeen: now, misses: 0 };
+        state.misses += 1;
+        presentState.set(key, state);
+
+        if (state.misses >= CONFIG.presentMissThreshold) {
           removeAvatar(avatar.username, true);
+          presentState.delete(key);
         }
       }
     }
