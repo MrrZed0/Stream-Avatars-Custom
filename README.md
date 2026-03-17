@@ -84,7 +84,7 @@ ws://127.0.0.1:8080/
 # Installation
 
 ## 1. Clone the repository
-git clone https://github.com/YOURNAME/viewer-avatar-overlay
+git clone https://github.com/MrrZed0/Stream-Avatars-Custom
 
 ### 2. Add the HTML Overlay
 OBS → Browser Source
