@@ -7,7 +7,7 @@ Viewers appear on screen as animated avatars that walk across the bottom of the 
 This project is inspired by **Evotars** but designed specifically for **Streamer.bot**.
 
 ![Image](https://github.com/MrrZed0/Stream-Avatars-Custom/blob/main/Photo.png?raw=true)
-![Image](https://github.com/MrrZed0/Stream-Avatars-Custom/blob/main/0318%20(3).gif)
+![Image](https://github.com/MrrZed0/Stream-Avatars-Custom/blob/main/333.gif?raw=true)
 
 ---
 
