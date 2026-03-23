@@ -1,0 +1,1362 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Streamer.bot Animal Crewmate Overlay</title>
+  <style>
+    :root {
+      --ground: 22px;
+      --status-bg: rgba(0,0,0,0.65);
+      --bubble-bg: rgba(250,250,250,0.98);
+      --bubble-border: rgba(0,0,0,0.7);
+      --name-bg: rgba(0,0,0,0.76);
+      --glow: rgba(255,255,255,0.30);
+      --outline: #000;
+      --visor-bg: #dbeaf5;
+      --visor-dark: #8ca4b6;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: transparent;
+      font-family: Arial, Helvetica, sans-serif;
+    }
+
+    #overlay {
+      position: fixed;
+      inset: 0;
+      overflow: hidden;
+      pointer-events: none;
+      background: transparent;
+    }
+
+    #world {
+      position: absolute;
+      inset: 0;
+      overflow: hidden;
+    }
+
+    #status {
+      position: absolute;
+      top: 12px;
+      left: 12px;
+      z-index: 9999;
+      padding: 8px 12px;
+      border-radius: 12px;
+      font-size: 12px;
+      color: #fff;
+      background: var(--status-bg);
+      border: 1px solid rgba(255,255,255,0.08);
+      backdrop-filter: blur(6px);
+    }
+
+    .avatar {
+      position: absolute;
+      width: 132px;
+      height: 186px;
+      bottom: var(--ground);
+      left: 0;
+      will-change: left, bottom, transform;
+      user-select: none;
+      pointer-events: none;
+      filter: drop-shadow(0 2px 2px rgba(0,0,0,.15));
+    }
+
+    .avatar .name {
+      position: absolute;
+      top: 18px;
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 5px 12px;
+      max-width: 190px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      border-radius: 999px;
+      background: var(--name-bg);
+      color: #fff;
+      font-size: 13px;
+      font-weight: 700;
+      z-index: 50;
+    }
+
+    .avatar .bubble {
+      position: absolute;
+      left: 50%;
+      bottom: 114px;
+      transform: translateX(-50%);
+      max-width: 560px;
+      min-width: 180px;
+      min-height: 42px;
+      padding: 12px 18px;
+      border-radius: 10px;
+      background: var(--bubble-bg);
+      border: 3px solid var(--bubble-border);
+      color: #333;
+      font-size: 15px;
+      line-height: 1.4;
+      text-align: center;
+      opacity: 0;
+      scale: 0.92;
+      transition: opacity .18s ease, scale .18s ease;
+      z-index: 51;
+      box-shadow: 0 8px 22px rgba(0,0,0,.18);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      flex-wrap: wrap;
+      word-break: normal;
+      white-space: normal;
+    }
+
+    .avatar .bubble.show {
+      opacity: 1;
+      scale: 1;
+    }
+
+    .avatar .bubble::after {
+      content: "";
+      position: absolute;
+      left: 50%;
+      bottom: -9px;
+      width: 14px;
+      height: 14px;
+      transform: translateX(-50%) rotate(45deg);
+      background: var(--bubble-bg);
+      border-right: 3px solid var(--bubble-border);
+      border-bottom: 3px solid var(--bubble-border);
+    }
+
+    .bubble .bubble-text {
+      white-space: normal;
+      word-break: normal;
+    }
+
+    .bubble .bubble-emote {
+      width: 34px;
+      height: 34px;
+      object-fit: contain;
+      vertical-align: middle;
+    }
+
+    .avatar .shadow {
+      position: absolute;
+      left: 50%;
+      bottom: 0;
+      width: 62px;
+      height: 14px;
+      transform: translateX(-50%);
+      border-radius: 50%;
+      background: rgba(0,0,0,0.22);
+      filter: blur(2px);
+      z-index: 1;
+      transition: transform .2s ease, opacity .2s ease;
+    }
+
+    .avatar .spriteWrap {
+      position: absolute;
+      left: 50%;
+      bottom: 8px;
+      width: 94px;
+      height: 112px;
+      transform: translateX(-50%);
+      transform-origin: center bottom;
+      z-index: 2;
+    }
+
+    .avatar.facing-left .spriteWrap {
+      transform: translateX(-50%) scaleX(-1);
+    }
+
+    .avatar .sprite {
+      position: absolute;
+      inset: 0;
+    }
+
+    .avatar.walking .spriteWrap {
+      animation: walkBob .34s infinite ease-in-out;
+    }
+
+    .avatar.idle .spriteWrap {
+      animation: idleFloat 2.2s infinite ease-in-out;
+    }
+
+    .piece {
+      position: absolute;
+      image-rendering: pixelated;
+    }
+
+    .music-layer {
+      position: absolute;
+      inset: 0;
+      z-index: 60;
+      pointer-events: none;
+    }
+
+    .note {
+      position: absolute;
+      font-size: 20px;
+      color: #7ed7ff;
+      text-shadow: 0 0 8px rgba(126,215,255,.65);
+      opacity: 0;
+      animation: noteFloat 1.2s ease-out forwards;
+    }
+
+    /* MAIN CREWMATE BODY */
+    .body {
+      left: 20px;
+      top: 16px;
+      width: 46px;
+      height: 66px;
+      background: var(--color);
+      border: 5px solid var(--outline);
+      border-radius: 22px 22px 16px 16px;
+      z-index: 5;
+      box-shadow:
+        inset -7px 0 0 rgba(0,0,0,.14),
+        inset 8px 0 0 rgba(255,255,255,.08);
+    }
+
+    .backpack {
+      left: 58px;
+      top: 32px;
+      width: 14px;
+      height: 32px;
+      background: var(--color-dark);
+      border: 5px solid var(--outline);
+      border-left: none;
+      border-radius: 0 8px 8px 0;
+      z-index: 4;
+      box-shadow: inset -3px 0 0 rgba(255,255,255,.08);
+    }
+
+    /* PROFILE PICTURE FACE / VISOR */
+    .visor {
+      left: 12px;
+      top: 24px;
+      width: 36px;
+      height: 24px;
+      border: 5px solid var(--outline);
+      border-radius: 18px 18px 16px 16px;
+      z-index: 10;
+      overflow: hidden;
+      background: var(--visor-bg);
+      box-shadow:
+        inset -4px 0 0 rgba(0,0,0,.12),
+        0 0 0 2px rgba(255,255,255,.06);
+    }
+
+    .visor-img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: center;
+      display: block;
+      image-rendering: auto;
+    }
+
+    .visor-highlight {
+      position: absolute;
+      left: 4px;
+      top: 3px;
+      width: 16px;
+      height: 7px;
+      border-radius: 999px;
+      background: rgba(255,255,255,.72);
+      z-index: 11;
+      pointer-events: none;
+    }
+
+    /* LEGS CLOSER TOGETHER */
+    .leg.left,
+    .leg.right {
+      width: 11px;
+      height: 20px;
+      background: var(--color);
+      border: 5px solid var(--outline);
+      border-top: none;
+      bottom: 0;
+      z-index: 4;
+      box-shadow: inset -3px 0 0 rgba(0,0,0,.10);
+    }
+
+    .leg.left { left: 27px; }
+    .leg.right { left: 43px; }
+
+    .avatar.walking .leg.left { animation: legLeft .26s infinite ease-in-out; }
+    .avatar.walking .leg.right { animation: legRight .26s infinite ease-in-out; }
+
+    /* ARMS CLOSER TOGETHER */
+    .arm.left,
+    .arm.right {
+      width: 10px;
+      height: 22px;
+      background: var(--color);
+      border: 5px solid var(--outline);
+      top: 44px;
+      z-index: 3;
+      transform-origin: top center;
+      box-shadow: inset -2px 0 0 rgba(0,0,0,.10);
+    }
+
+    .arm.left { left: 16px; }
+    .arm.right { right: 16px; }
+
+    /* ANIMAL PARTS */
+    .ear.left, .ear.right,
+    .inner-ear.left, .inner-ear.right,
+    .dog-ear.left, .dog-ear.right,
+    .horse-ear.left, .horse-ear.right,
+    .horn.left, .horn.right,
+    .lion-mane,
+    .tiger-stripe.s1, .tiger-stripe.s2, .tiger-stripe.s3,
+    .muzzle,
+    .nose,
+    .whisker.w1, .whisker.w2, .whisker.w3, .whisker.w4,
+    .bunny-tail,
+    .bear-ear.left, .bear-ear.right {
+      display: none;
+    }
+
+    /* common animal nose */
+    .muzzle {
+      left: 25px;
+      top: 51px;
+      width: 14px;
+      height: 10px;
+      background: #f6e4cf;
+      border: 3px solid #000;
+      border-radius: 8px;
+      z-index: 12;
+    }
+
+    .nose {
+      left: 29px;
+      top: 54px;
+      width: 6px;
+      height: 4px;
+      background: #222;
+      border-radius: 999px;
+      z-index: 13;
+    }
+
+    .whisker {
+      width: 10px;
+      height: 2px;
+      background: #000;
+      z-index: 12;
+    }
+
+    .whisker.w1 { left: 14px; top: 55px; }
+    .whisker.w2 { left: 14px; top: 60px; }
+    .whisker.w3 { left: 39px; top: 55px; }
+    .whisker.w4 { left: 39px; top: 60px; }
+
+    /* cat */
+    .avatar.type-cat .ear.left,
+    .avatar.type-cat .ear.right,
+    .avatar.type-cat .inner-ear.left,
+    .avatar.type-cat .inner-ear.right,
+    .avatar.type-cat .muzzle,
+    .avatar.type-cat .nose,
+    .avatar.type-cat .whisker {
+      display: block;
+    }
+
+    .ear.left, .ear.right {
+      width: 12px;
+      height: 14px;
+      top: 2px;
+      background: var(--color);
+      border: 5px solid #000;
+      border-bottom: none;
+      z-index: 6;
+      clip-path: polygon(0 100%, 50% 0, 100% 100%);
+    }
+
+    .ear.left { left: 18px; }
+    .ear.right { left: 46px; }
+
+    .inner-ear.left, .inner-ear.right {
+      width: 5px;
+      height: 6px;
+      top: 8px;
+      background: #ffb5c7;
+      z-index: 7;
+      clip-path: polygon(0 100%, 50% 0, 100% 100%);
+    }
+
+    .inner-ear.left { left: 24px; }
+    .inner-ear.right { left: 52px; }
+
+    /* dog */
+    .avatar.type-dog .dog-ear.left,
+    .avatar.type-dog .dog-ear.right,
+    .avatar.type-dog .muzzle,
+    .avatar.type-dog .nose {
+      display: block;
+    }
+
+    .dog-ear.left, .dog-ear.right {
+      width: 12px;
+      height: 18px;
+      top: 6px;
+      background: var(--color-dark);
+      border: 4px solid #000;
+      z-index: 6;
+    }
+
+    .dog-ear.left {
+      left: 16px;
+      border-radius: 0 0 8px 8px;
+    }
+
+    .dog-ear.right {
+      left: 50px;
+      border-radius: 0 0 8px 8px;
+    }
+
+    /* bunny */
+    .avatar.type-bunny .ear.left,
+    .avatar.type-bunny .ear.right,
+    .avatar.type-bunny .inner-ear.left,
+    .avatar.type-bunny .inner-ear.right,
+    .avatar.type-bunny .bunny-tail {
+      display: block;
+    }
+
+    .avatar.type-bunny .ear.left,
+    .avatar.type-bunny .ear.right {
+      width: 10px;
+      height: 22px;
+      top: -8px;
+      border-radius: 8px 8px 0 0;
+      clip-path: none;
+      border-bottom: 5px solid #000;
+    }
+
+    .avatar.type-bunny .ear.left { left: 20px; }
+    .avatar.type-bunny .ear.right { left: 48px; }
+
+    .avatar.type-bunny .inner-ear.left,
+    .avatar.type-bunny .inner-ear.right {
+      width: 4px;
+      height: 12px;
+      top: 0;
+      background: #ffb5c7;
+      clip-path: none;
+      border-radius: 8px;
+    }
+
+    .avatar.type-bunny .inner-ear.left { left: 23px; }
+    .avatar.type-bunny .inner-ear.right { left: 51px; }
+
+    .bunny-tail {
+      right: 2px;
+      top: 62px;
+      width: 10px;
+      height: 10px;
+      background: #fff;
+      border: 3px solid #000;
+      border-radius: 50%;
+      z-index: 3;
+    }
+
+    /* horse */
+    .avatar.type-horse .horse-ear.left,
+    .avatar.type-horse .horse-ear.right,
+    .avatar.type-horse .muzzle,
+    .avatar.type-horse .nose {
+      display: block;
+    }
+
+    .horse-ear.left, .horse-ear.right {
+      width: 8px;
+      height: 16px;
+      top: 0;
+      background: var(--color-dark);
+      border: 4px solid #000;
+      z-index: 6;
+    }
+
+    .horse-ear.left { left: 22px; }
+    .horse-ear.right { left: 46px; }
+
+    .avatar.type-horse .muzzle {
+      width: 16px;
+      height: 12px;
+      left: 24px;
+      top: 50px;
+    }
+
+    /* lion */
+    .avatar.type-lion .lion-mane,
+    .avatar.type-lion .muzzle,
+    .avatar.type-lion .nose,
+    .avatar.type-lion .bear-ear.left,
+    .avatar.type-lion .bear-ear.right {
+      display: block;
+    }
+
+    .lion-mane {
+      left: 10px;
+      top: 4px;
+      width: 60px;
+      height: 66px;
+      background: #d88b1f;
+      border: 5px solid #000;
+      border-radius: 22px;
+      z-index: 4;
+      clip-path: polygon(8% 10%, 22% 0, 34% 10%, 50% 0, 66% 10%, 82% 0, 94% 12%, 100% 34%, 92% 50%, 100% 72%, 84% 86%, 68% 100%, 50% 90%, 30% 100%, 14% 86%, 0 68%, 8% 48%, 0 28%);
+    }
+
+    /* bear */
+    .avatar.type-bear .bear-ear.left,
+    .avatar.type-bear .bear-ear.right,
+    .avatar.type-bear .muzzle,
+    .avatar.type-bear .nose {
+      display: block;
+    }
+
+    .bear-ear.left, .bear-ear.right {
+      width: 12px;
+      height: 12px;
+      top: 2px;
+      background: var(--color-dark);
+      border: 4px solid #000;
+      border-radius: 50%;
+      z-index: 6;
+    }
+
+    .bear-ear.left { left: 16px; }
+    .bear-ear.right { left: 50px; }
+
+    /* tiger */
+    .avatar.type-tiger .ear.left,
+    .avatar.type-tiger .ear.right,
+    .avatar.type-tiger .inner-ear.left,
+    .avatar.type-tiger .inner-ear.right,
+    .avatar.type-tiger .muzzle,
+    .avatar.type-tiger .nose,
+    .avatar.type-tiger .tiger-stripe {
+      display: block;
+    }
+
+    .tiger-stripe {
+      width: 6px;
+      height: 12px;
+      background: #1a1a1a;
+      z-index: 9;
+      clip-path: polygon(50% 0, 100% 100%, 0 100%);
+    }
+
+    .tiger-stripe.s1 { left: 24px; top: 20px; }
+    .tiger-stripe.s2 { left: 38px; top: 16px; }
+    .tiger-stripe.s3 { left: 52px; top: 20px; }
+
+    .avatar.chat-glow {
+      animation: glowPulse .95s ease;
+    }
+
+    .avatar.chat-glow .shadow {
+      transform: translateX(-50%) scale(1.08);
+      opacity: 0.85;
+    }
+
+    .avatar.wave .arm.right {
+      animation: waveHi .42s ease-in-out 5 !important;
+    }
+
+    .avatar.sit .spriteWrap {
+      transform: translateX(-50%) translateY(10px) scaleY(0.92);
+    }
+
+    .avatar.facing-left.sit .spriteWrap {
+      transform: translateX(-50%) scaleX(-1) translateY(10px) scaleY(0.92);
+    }
+
+    .avatar.sit .leg.left,
+    .avatar.sit .leg.right {
+      transform: rotate(78deg) translateY(3px);
+    }
+
+    .avatar.sing .body {
+      animation: singBounce .45s ease-in-out infinite;
+    }
+
+    .avatar.grown .spriteWrap {
+      scale: 1.35;
+    }
+
+    .avatar.falling .spriteWrap {
+      animation: none !important;
+    }
+
+    .poof {
+      position: absolute;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: rgba(255,255,255,.95);
+      box-shadow:
+        0 0 10px rgba(255,255,255,.8),
+        18px -8px 0 2px rgba(255,255,255,.7),
+        -18px -4px 0 1px rgba(255,255,255,.7),
+        10px 12px 0 1px rgba(255,255,255,.65),
+        -12px 10px 0 2px rgba(255,255,255,.65);
+      pointer-events: none;
+      animation: poof .55s ease-out forwards;
+      z-index: 20;
+    }
+
+    @keyframes walkBob {
+      0%,100% { transform: translateX(-50%) translateY(0); }
+      50% { transform: translateX(-50%) translateY(-3px); }
+    }
+
+    @keyframes idleFloat {
+      0%,100% { transform: translateX(-50%) translateY(0); }
+      50% { transform: translateX(-50%) translateY(-2px); }
+    }
+
+    @keyframes legLeft {
+      0%,100% { transform: translateY(0); }
+      50% { transform: translateY(2px); }
+    }
+
+    @keyframes legRight {
+      0%,100% { transform: translateY(2px); }
+      50% { transform: translateY(0); }
+    }
+
+    @keyframes waveHi {
+      0%,100% { transform: rotate(-6deg); }
+      50% { transform: rotate(-42deg); }
+    }
+
+    @keyframes glowPulse {
+      0% { filter: drop-shadow(0 0 0 rgba(255,255,255,0)); }
+      35% { filter: drop-shadow(0 0 10px var(--glow)) drop-shadow(0 0 20px rgba(126,215,255,.26)); }
+      100% { filter: drop-shadow(0 0 0 rgba(255,255,255,0)); }
+    }
+
+    @keyframes singBounce {
+      0%,100% { transform: scaleY(1); }
+      50% { transform: scaleY(1.03); }
+    }
+
+    @keyframes noteFloat {
+      0% { opacity: 0; transform: translateY(0) scale(.7); }
+      15% { opacity: 1; }
+      100% { opacity: 0; transform: translateY(-28px) translateX(8px) scale(1.15); }
+    }
+
+    @keyframes poof {
+      0% { opacity: 1; transform: scale(.5); }
+      100% { opacity: 0; transform: scale(2.6); }
+    }
+  </style>
+</head>
+<body>
+  <div id="overlay">
+    <div id="status">Connecting to Streamer.bot…</div>
+    <div id="world"></div>
+  </div>
+
+  <script>
+    const CONFIG = {
+      wsUrl: "ws://127.0.0.1:8080/",
+      reconnectMs: 3000,
+      bubbleMs: 3600,
+      showStatus: true,
+      maxAvatars: 150,
+      leftBound: 16,
+      rightPadding: 130,
+      speedMin: 0.06,
+      speedMax: 0.13,
+      gravity: 0.55,
+      pendingRaidMarkMs: 20000,
+      presentMissThreshold: 3,
+      hiddenUsers: [
+        "streamelements","streamelementshq","streamlabs","streamlab","streamstickers",
+        "soundalerts","nightbot","moobot","ankhbot","deepbot","phantombot",
+        "commanderroot","fossabot","supibot","wizebot","botisimo","blerp",
+        "dotabod","firebot","kickbot","kofistreambot","ouvertbot","playwithviewersbot",
+        "pokemoncommunitygame","remasuri_bot","ronniabot","sery_bot","songlistbot",
+        "spanixbot","super_sweet_bot","tangiabot","trackerggbot","tune2livebot",
+        "xanbot","wzbot","hexe_bot","clipitbot","jeetbot","timeoutwithbits",
+        "twitchprediction","botrix","botrixoficial","frostytoolsdotcom",
+        "streamer.bot","streamerbot","donationalerts_","overlayexpert","own3d",
+        "casterlabs","advocateplatform","casinolytics","xsolla","pokemoncommunitygame"
+      ],
+      fallbackAvatar: "https://static-cdn.jtvnw.net/jtv_user_pictures/xarth/404_user_70x70.png"
+    };
+
+    const avatarTypes = ["cat", "dog", "bunny", "horse", "lion", "bear", "tiger"];
+
+    const avatarPalettes = [
+      "#ff0000","#ff2d2d","#ff5a5a","#ff7a7a",
+      "#ff6b00","#ff8c1a","#ff9f3d","#ffb457",
+      "#ffcc00","#ffe100","#fff04a","#cce500",
+      "#8fd400","#4dcf36","#00c853","#00b894",
+      "#00bcd4","#00a8ff","#1e90ff","#4169e1",
+      "#5b5bd6","#7a5cff","#8e44ad","#b06ab3",
+      "#ff4fa3","#ff77c8","#ff9ad5","#ff6f91",
+      "#8d6e63","#a1887f","#795548","#607d8b",
+      "#9e9e9e","#bdbdbd","#5f27cd","#10ac84",
+      "#f39c12","#2ecc71","#e74c3c","#3498db",
+      "#fd79a8","#55efc4","#81ecec","#fab1a0"
+    ];
+
+    const world = document.getElementById("world");
+    const statusEl = document.getElementById("status");
+    const avatars = new Map();
+    const presentState = new Map();
+    const avatarUrlCache = new Map();
+
+    let ws = null;
+    let lastFrame = performance.now();
+    let pendingRaidCount = 0;
+    let pendingRaidUntil = 0;
+
+    function setStatus(text) {
+      if (!CONFIG.showStatus) {
+        statusEl.style.display = "none";
+        return;
+      }
+      statusEl.style.display = "block";
+      statusEl.textContent = text;
+    }
+
+    function clamp(n, min, max) { return Math.max(min, Math.min(max, n)); }
+    function rand(min, max) { return Math.random() * (max - min) + min; }
+    function maxX() { return Math.max(CONFIG.leftBound, window.innerWidth - CONFIG.rightPadding); }
+    function sanitizeUser(user) { return String(user || "").trim(); }
+    function normalizeUser(user) { return sanitizeUser(user).toLowerCase(); }
+
+    function hiddenUser(user) {
+      const name = normalizeUser(user);
+      if (!name) return true;
+      if (CONFIG.hiddenUsers.includes(name)) return true;
+
+      const botPatterns = [
+        /bot$/i, /_bot$/i, /^bot/i,
+        /streamlabs/i, /streamelements/i, /soundalerts/i,
+        /nightbot/i, /moobot/i, /fossabot/i, /supibot/i, /wizebot/i
+      ];
+
+      return botPatterns.some((pattern) => pattern.test(name));
+    }
+
+    function hashString(str) {
+      let h = 2166136261;
+      for (let i = 0; i < str.length; i++) {
+        h ^= str.charCodeAt(i);
+        h += (h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24);
+      }
+      return Math.abs(h >>> 0);
+    }
+
+    function seededChoice(key, arr) {
+      return arr[hashString(key) % arr.length];
+    }
+
+    function shadeHex(hex, percent) {
+      const clean = hex.replace("#", "");
+      const num = parseInt(clean, 16);
+      let r = (num >> 16) & 0xff;
+      let g = (num >> 8) & 0xff;
+      let b = num & 0xff;
+
+      r = Math.max(0, Math.min(255, Math.round(r + (255 * percent / 100))));
+      g = Math.max(0, Math.min(255, Math.round(g + (255 * percent / 100))));
+      b = Math.max(0, Math.min(255, Math.round(b + (255 * percent / 100))));
+
+      return `#${[r,g,b].map(v => v.toString(16).padStart(2, "0")).join("")}`;
+    }
+
+    function buildPalette(color) {
+      return {
+        color,
+        dark: shadeHex(color, -34),
+        light: shadeHex(color, 22)
+      };
+    }
+
+    function paletteKey(p) {
+      return `${p.color}|${p.dark}|${p.light}`;
+    }
+
+    function getUsedPaletteKeys() {
+      const used = new Set();
+      for (const avatar of avatars.values()) {
+        if (avatar.paletteKey) used.add(avatar.paletteKey);
+      }
+      return used;
+    }
+
+    function getUniquePaletteForUser(username) {
+      const used = getUsedPaletteKeys();
+      const available = avatarPalettes
+        .map(buildPalette)
+        .filter(p => !used.has(paletteKey(p)));
+
+      if (available.length > 0) {
+        return available[Math.floor(Math.random() * available.length)];
+      }
+
+      return buildPalette(seededChoice(username, avatarPalettes));
+    }
+
+    function getAvatarTypeForUser(username) {
+      return seededChoice(username + "-type", avatarTypes);
+    }
+
+    async function resolveAvatarUrl(username) {
+      const key = normalizeUser(username);
+      if (avatarUrlCache.has(key)) return avatarUrlCache.get(key);
+
+      try {
+        const response = await fetch(`https://decapi.me/twitch/avatar/${encodeURIComponent(username)}`);
+        const text = (await response.text()).trim();
+        const finalUrl = text.startsWith("http") ? text : CONFIG.fallbackAvatar;
+        avatarUrlCache.set(key, finalUrl);
+        return finalUrl;
+      } catch {
+        avatarUrlCache.set(key, CONFIG.fallbackAvatar);
+        return CONFIG.fallbackAvatar;
+      }
+    }
+
+    async function applyProfileFace(username, avatar) {
+      const url = await resolveAvatarUrl(username);
+      const img = avatar.el.querySelector(".visor-img");
+      if (img) img.src = url;
+    }
+
+    function extractUsersFromPresentList(rawUsers) {
+      const result = [];
+      if (!Array.isArray(rawUsers)) return result;
+
+      for (const entry of rawUsers) {
+        if (!entry) continue;
+        let name = "";
+        if (typeof entry === "string") name = entry;
+        else if (typeof entry === "object") {
+          name = entry.display || entry.displayName || entry.userName || entry.username || entry.login || entry.name || "";
+        }
+
+        name = sanitizeUser(name);
+        if (name && !hiddenUser(name)) result.push(name);
+      }
+
+      return result;
+    }
+
+    function createPoof(x, y) {
+      const p = document.createElement("div");
+      p.className = "poof";
+      p.style.left = `${x}px`;
+      p.style.top = `${y}px`;
+      world.appendChild(p);
+      setTimeout(() => p.remove(), 650);
+    }
+
+    function updateFacing(avatar) {
+      avatar.el.classList.toggle("facing-left", avatar.direction < 0);
+    }
+
+    function updateAvatarPosition(avatar) {
+      avatar.el.style.left = `${avatar.x}px`;
+      avatar.el.style.bottom = `calc(var(--ground) + ${avatar.y}px)`;
+      updateFacing(avatar);
+    }
+
+    function renderBubbleContent(container, message, emotes) {
+      container.innerHTML = "";
+      const text = String(message || "");
+
+      if (!Array.isArray(emotes) || emotes.length === 0) {
+        const span = document.createElement("span");
+        span.className = "bubble-text";
+        span.textContent = text;
+        container.appendChild(span);
+        return;
+      }
+
+      const normalized = emotes
+        .map(e => ({
+          start: Number(e.start),
+          end: Number(e.end),
+          id: String(e.id || ""),
+          code: String(e.code || "")
+        }))
+        .filter(e => Number.isFinite(e.start) && Number.isFinite(e.end) && e.id)
+        .sort((a, b) => a.start - b.start);
+
+      if (normalized.length === 0) {
+        const span = document.createElement("span");
+        span.className = "bubble-text";
+        span.textContent = text;
+        container.appendChild(span);
+        return;
+      }
+
+      let cursor = 0;
+
+      for (const emote of normalized) {
+        if (emote.start > cursor) {
+          const span = document.createElement("span");
+          span.className = "bubble-text";
+          span.textContent = text.slice(cursor, emote.start);
+          container.appendChild(span);
+        }
+
+        const img = document.createElement("img");
+        img.className = "bubble-emote";
+        img.alt = emote.code || text.slice(emote.start, emote.end + 1) || "emote";
+        img.src = `https://static-cdn.jtvnw.net/emoticons/v2/${encodeURIComponent(emote.id)}/default/dark/2.0`;
+        container.appendChild(img);
+
+        cursor = emote.end + 1;
+      }
+
+      if (cursor < text.length) {
+        const span = document.createElement("span");
+        span.className = "bubble-text";
+        span.textContent = text.slice(cursor);
+        container.appendChild(span);
+      }
+    }
+
+    function showBubble(avatar, message, emotes = [], ms = CONFIG.bubbleMs) {
+      const bubble = avatar.el.querySelector(".bubble");
+      renderBubbleContent(bubble, message, emotes);
+      bubble.classList.add("show");
+      clearTimeout(avatar.bubbleTimer);
+      avatar.bubbleTimer = setTimeout(() => bubble.classList.remove("show"), ms);
+    }
+
+    function pulseGlow(avatar) {
+      avatar.el.classList.remove("chat-glow");
+      void avatar.el.offsetWidth;
+      avatar.el.classList.add("chat-glow");
+      setTimeout(() => avatar.el.classList.remove("chat-glow"), 1000);
+    }
+
+    function clearReaction(avatar) {
+      avatar.el.classList.remove("wave", "sit", "sing");
+      if (avatar.reactionTimer) {
+        clearTimeout(avatar.reactionTimer);
+        avatar.reactionTimer = null;
+      }
+      if (avatar.musicTimer) {
+        clearInterval(avatar.musicTimer);
+        avatar.musicTimer = null;
+      }
+      const layer = avatar.el.querySelector(".music-layer");
+      if (layer) layer.innerHTML = "";
+    }
+
+    function addMusicNote(avatar) {
+      const layer = avatar.el.querySelector(".music-layer");
+      if (!layer) return;
+      const note = document.createElement("div");
+      note.className = "note";
+      note.textContent = ["♪", "♫", "♬"][Math.floor(Math.random() * 3)];
+      note.style.left = `${rand(66, 94)}px`;
+      note.style.top = `${rand(20, 50)}px`;
+      layer.appendChild(note);
+      setTimeout(() => note.remove(), 1300);
+    }
+
+    function randomReaction(avatar) {
+      clearReaction(avatar);
+
+      const actions = ["jump", "wave", "sit", "sing"];
+      const pick = actions[Math.floor(Math.random() * actions.length)];
+
+      if (pick === "jump") {
+        avatar.vy = Math.max(avatar.vy, 8.8);
+        return;
+      }
+
+      if (pick === "wave") {
+        avatar.el.classList.add("wave");
+        avatar.reactionTimer = setTimeout(() => {
+          avatar.el.classList.remove("wave");
+        }, 2200);
+        return;
+      }
+
+      if (pick === "sit") {
+        avatar.el.classList.add("sit");
+        avatar.reactionTimer = setTimeout(() => {
+          avatar.el.classList.remove("sit");
+        }, 2200);
+        return;
+      }
+
+      if (pick === "sing") {
+        avatar.el.classList.add("sing");
+        avatar.musicTimer = setInterval(() => addMusicNote(avatar), 260);
+        addMusicNote(avatar);
+        avatar.reactionTimer = setTimeout(() => {
+          avatar.el.classList.remove("sing");
+          if (avatar.musicTimer) {
+            clearInterval(avatar.musicTimer);
+            avatar.musicTimer = null;
+          }
+          const layer = avatar.el.querySelector(".music-layer");
+          if (layer) layer.innerHTML = "";
+        }, 2400);
+      }
+    }
+
+    function spawnX() {
+      const used = [...avatars.values()].map(a => a.x).sort((a, b) => a - b);
+      if (!used.length) return clamp(window.innerWidth / 2, CONFIG.leftBound, maxX());
+
+      let bestGap = -1;
+      let best = CONFIG.leftBound;
+      let prev = CONFIG.leftBound;
+
+      for (const u of used) {
+        const gap = u - prev;
+        if (gap > bestGap) {
+          bestGap = gap;
+          best = prev + gap / 2;
+        }
+        prev = u;
+      }
+
+      const endGap = maxX() - prev;
+      if (endGap > bestGap) best = prev + endGap / 2;
+
+      return clamp(best, CONFIG.leftBound, maxX());
+    }
+
+    function chooseRandomTarget(avatar) {
+      const distance = rand(80, 260);
+      const dir = Math.random() > 0.5 ? 1 : -1;
+
+      let target = avatar.x + distance * dir;
+      target = clamp(target, CONFIG.leftBound, maxX());
+
+      avatar.targetX = target;
+      avatar.direction = target >= avatar.x ? 1 : -1;
+
+      if (!avatar.el.classList.contains("sit")) {
+        avatar.el.classList.remove("idle");
+        avatar.el.classList.add("walking");
+      }
+
+      avatar.nextMoveAt = Date.now() + rand(1800, 5000);
+    }
+
+    function createAvatar(username, opts = {}) {
+      const displayName = sanitizeUser(username);
+      const key = normalizeUser(displayName);
+      if (avatars.has(key)) return avatars.get(key);
+
+      if (avatars.size >= CONFIG.maxAvatars) {
+        const oldest = [...avatars.values()].sort((a, b) => a.createdAt - b.createdAt)[0];
+        if (oldest) removeAvatar(oldest.username, false);
+      }
+
+      const type = opts.avatarType || getAvatarTypeForUser(displayName);
+
+      const el = document.createElement("div");
+      el.className = `avatar idle type-${type}`;
+      el.innerHTML = `
+        <div class="name"></div>
+        <div class="bubble"></div>
+        <div class="shadow"></div>
+        <div class="music-layer"></div>
+        <div class="spriteWrap">
+          <div class="sprite">
+            <div class="piece lion-mane"></div>
+
+            <div class="piece bear-ear left"></div>
+            <div class="piece bear-ear right"></div>
+
+            <div class="piece ear left"></div>
+            <div class="piece ear right"></div>
+            <div class="piece inner-ear left"></div>
+            <div class="piece inner-ear right"></div>
+
+            <div class="piece dog-ear left"></div>
+            <div class="piece dog-ear right"></div>
+
+            <div class="piece horse-ear left"></div>
+            <div class="piece horse-ear right"></div>
+
+            <div class="piece tiger-stripe s1"></div>
+            <div class="piece tiger-stripe s2"></div>
+            <div class="piece tiger-stripe s3"></div>
+
+            <div class="piece arm left"></div>
+            <div class="piece arm right"></div>
+
+            <div class="piece body"></div>
+            <div class="piece backpack"></div>
+
+            <div class="piece visor">
+              <img class="visor-img" alt="">
+              <div class="visor-highlight"></div>
+            </div>
+
+            <div class="piece muzzle"></div>
+            <div class="piece nose"></div>
+            <div class="piece whisker w1"></div>
+            <div class="piece whisker w2"></div>
+            <div class="piece whisker w3"></div>
+            <div class="piece whisker w4"></div>
+
+            <div class="piece bunny-tail"></div>
+
+            <div class="piece leg left"></div>
+            <div class="piece leg right"></div>
+          </div>
+        </div>
+      `;
+
+      el.querySelector(".name").textContent = displayName;
+      world.appendChild(el);
+
+      const palette = getUniquePaletteForUser(displayName);
+
+      const avatar = {
+        key,
+        username: displayName,
+        el,
+        x: spawnX(),
+        y: opts.spawnFall ? Math.max(220, window.innerHeight * 0.55) : 0,
+        vy: 0,
+        direction: Math.random() > 0.5 ? 1 : -1,
+        speed: rand(CONFIG.speedMin, CONFIG.speedMax),
+        targetX: null,
+        createdAt: Date.now(),
+        bubbleTimer: null,
+        reactionTimer: null,
+        musicTimer: null,
+        grown: false,
+        nextMoveAt: Date.now() + rand(500, 3500),
+        avatarType: type,
+        color: palette.color,
+        colorDark: palette.dark,
+        colorLight: palette.light,
+        paletteKey: paletteKey(palette)
+      };
+
+      avatars.set(key, avatar);
+      avatar.el.style.setProperty("--color", avatar.color);
+      avatar.el.style.setProperty("--color-dark", avatar.colorDark);
+      avatar.el.style.setProperty("--color-light", avatar.colorLight);
+      avatar.el.classList.toggle("falling", avatar.y > 0);
+      updateAvatarPosition(avatar);
+      applyProfileFace(displayName, avatar);
+
+      if (!opts.silent) showBubble(avatar, displayName, [], 1200);
+      return avatar;
+    }
+
+    function removeAvatar(username, poof = true) {
+      const key = normalizeUser(username);
+      const avatar = avatars.get(key);
+      if (!avatar) return;
+
+      clearTimeout(avatar.bubbleTimer);
+      clearReaction(avatar);
+
+      if (poof) createPoof(avatar.x + 55, window.innerHeight - 72 - avatar.y);
+      avatar.el.remove();
+      avatars.delete(key);
+      presentState.delete(key);
+    }
+
+    function getAvatar(username) {
+      return avatars.get(normalizeUser(username)) || null;
+    }
+
+    function handleChat(user, message, emotes = []) {
+      const displayName = sanitizeUser(user);
+      if (!displayName || hiddenUser(displayName)) return;
+
+      let avatar = getAvatar(displayName);
+      const isNew = !avatar;
+
+      if (!avatar) {
+        avatar = createAvatar(displayName, { spawnFall: true });
+      } else if (avatar.username !== displayName) {
+        avatar.username = displayName;
+        avatar.el.querySelector(".name").textContent = displayName;
+      }
+
+      const text = String(message || "").trim();
+
+      if (text || (Array.isArray(emotes) && emotes.length)) {
+        showBubble(avatar, text, emotes, CONFIG.bubbleMs);
+      }
+
+      pulseGlow(avatar);
+      randomReaction(avatar);
+
+      if (isNew || avatar.targetX == null) {
+        chooseRandomTarget(avatar);
+      } else {
+        avatar.nextMoveAt = Date.now() + rand(1200, 3200);
+      }
+    }
+
+    function applyViewerList(names) {
+      const now = Date.now();
+      const nextSet = new Set(names.map(normalizeUser));
+
+      for (const name of names) {
+        const key = normalizeUser(name);
+        presentState.set(key, { lastSeen: now, misses: 0 });
+
+        if (!avatars.has(key)) {
+          createAvatar(name, { spawnFall: true, silent: true });
+        }
+      }
+
+      for (const [key, avatar] of avatars) {
+        if (nextSet.has(key)) continue;
+
+        const state = presentState.get(key) || { lastSeen: now, misses: 0 };
+        state.misses += 1;
+        presentState.set(key, state);
+
+        if (state.misses >= CONFIG.presentMissThreshold) {
+          removeAvatar(avatar.username, true);
+        }
+      }
+    }
+
+    function handlePresentPayload(payload) {
+      const names = extractUsersFromPresentList(payload.users || payload.viewers || payload.list || []);
+      applyViewerList(names);
+    }
+
+    function handleRaidPayload(payload) {
+      const count = Number(payload.viewers || payload.count || 0);
+      if (count > 0) {
+        pendingRaidCount = count;
+        pendingRaidUntil = Date.now() + CONFIG.pendingRaidMarkMs;
+      }
+    }
+
+    function connect() {
+      setStatus("Connecting to Streamer.bot…");
+      ws = new WebSocket(CONFIG.wsUrl);
+
+      ws.onopen = () => {
+        setStatus("Connected. Subscribing…");
+        ws.send(JSON.stringify({
+          request: "Subscribe",
+          id: "viewer-overlay-sub",
+          events: { General: ["Custom"] }
+        }));
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data);
+
+          if (msg.id === "viewer-overlay-sub" && msg.status === "ok") {
+            setStatus("Subscribed to General.Custom");
+            return;
+          }
+
+          if (!(msg.event && msg.event.source === "General" && msg.event.type === "Custom")) return;
+
+          let payload = msg.data;
+          if (typeof payload === "string") {
+            try { payload = JSON.parse(payload); } catch { return; }
+          }
+
+          if (!payload || !payload.type) return;
+
+          if (payload.type === "chat") handleChat(payload.user, payload.message || "", payload.emotes || []);
+          if (payload.type === "present_viewers") handlePresentPayload(payload);
+          if (payload.type === "raid") handleRaidPayload(payload);
+        } catch (err) {
+          console.error("Bad websocket payload", err, event.data);
+        }
+      };
+
+      ws.onerror = () => setStatus("WebSocket error");
+      ws.onclose = () => {
+        setStatus("Disconnected. Retrying…");
+        setTimeout(connect, CONFIG.reconnectMs);
+      };
+    }
+
+    function animate(now) {
+      const dt = Math.min(32, now - lastFrame);
+      lastFrame = now;
+      const nowTime = Date.now();
+
+      for (const avatar of avatars.values()) {
+        if (avatar.y > 0 || avatar.vy > 0) {
+          avatar.vy -= CONFIG.gravity;
+          avatar.y += avatar.vy;
+
+          if (avatar.y <= 0) {
+            avatar.y = 0;
+            avatar.vy = 0;
+            avatar.el.classList.remove("falling");
+            avatar.nextMoveAt = nowTime + rand(400, 1800);
+          }
+        }
+
+        if (avatar.y === 0) {
+          if ((avatar.targetX == null || Math.abs(avatar.targetX - avatar.x) < 1) && nowTime >= avatar.nextMoveAt) {
+            chooseRandomTarget(avatar);
+          }
+
+          const dx = (avatar.targetX ?? avatar.x) - avatar.x;
+          const dist = Math.abs(dx);
+
+          if (dist > 0.5 && !avatar.el.classList.contains("sit")) {
+            const step = Math.min(dist, avatar.speed * dt);
+            avatar.x += Math.sign(dx) * step;
+            avatar.direction = dx > 0 ? 1 : -1;
+            avatar.el.classList.remove("idle");
+            avatar.el.classList.add("walking");
+          } else if (!avatar.el.classList.contains("sit")) {
+            avatar.x = avatar.targetX ?? avatar.x;
+            avatar.el.classList.remove("walking");
+            avatar.el.classList.add("idle");
+          }
+        }
+
+        avatar.x = clamp(avatar.x, CONFIG.leftBound, maxX());
+        updateAvatarPosition(avatar);
+      }
+
+      requestAnimationFrame(animate);
+    }
+
+    window.addEventListener("resize", () => {
+      for (const avatar of avatars.values()) {
+        avatar.x = clamp(avatar.x, CONFIG.leftBound, maxX());
+        if (avatar.targetX != null) avatar.targetX = clamp(avatar.targetX, CONFIG.leftBound, maxX());
+        updateAvatarPosition(avatar);
+      }
+    });
+
+    connect();
+    requestAnimationFrame(animate);
+  </script>
+</body>
+</html>
